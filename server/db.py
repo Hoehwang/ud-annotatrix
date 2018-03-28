@@ -7,7 +7,7 @@ import sqlite3
 
 
 class CorpusDB():
-    '''the db fith tests and users'''
+    '''the db of corpora'''
 
     def __init__(self, path):
         self.path = path

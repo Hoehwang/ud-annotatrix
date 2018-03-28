@@ -14,34 +14,27 @@ from flask import send_from_directory
 from flask import url_for
 import os
 import uuid
-from db import CorpusDB
+from fine_db import CorpusDB
 import config
 
-PATH_TO_CORPORA = 'corpora'
-
-welcome = '''
+DB_NAME = 'corpora.db'
+WELCOME = '''
 *******************************************************************************
-* NOW POINT YOUR BROWSER AT: http://127.0.0.1:5316/                           *
+* NOW POINT YOUR BROWSER AT: http://127.0.0.1:5317/                           *
 *******************************************************************************
 '''
 
 app = Flask(__name__, static_folder='../standalone', static_url_path='/annotatrix')
-
-if not os.path.exists(PATH_TO_CORPORA):
-    os.mkdir(PATH_TO_CORPORA)
-
+DB = CorpusDB(DB_NAME)
 
 
 @app.route('/save', methods=['GET', 'POST'])
 def save_corpus():
     if request.form:
         sent = request.form['content']
-        treebank_id = request.form['treebank_id']
-        path = treebank_id.strip('#') + '.db'
+        treebank_id = request.form['treebank_id'].strip('#')
         sent_num = request.form['sentNum']
-        if os.path.exists(PATH_TO_CORPORA + '/' + path):
-            db = CorpusDB(PATH_TO_CORPORA + '/' + path)
-            db.update_db(sent, sent_num)
+        DB.update_db(sent, treebank_id, sent_num)
         return jsonify()
     return jsonify()
 
@@ -49,15 +42,10 @@ def save_corpus():
 @app.route('/load', methods=['GET', 'POST'])
 def load_sentence():
     if request.form:
-        treebank_id = request.form['treebank_id']
-        path = treebank_id.strip('#') + '.db'
+        treebank_id = request.form['treebank_id'].strip('#')
         sent_num = request.form['sentNum']
-        if os.path.exists(PATH_TO_CORPORA + '/' + path):
-            db = CorpusDB(PATH_TO_CORPORA + '/' + path)
-            sent, max_sent = db.get_sentence(sent_num)
-            return jsonify({'content': sent, 'max': max_sent})
-        else:
-            return jsonify({'content': 'something wrong'})
+        sent, max_sent = DB.get_sentence(sent_num, treebank_id)
+        return jsonify({'content': sent, 'max': max_sent})
     return jsonify()
 
 
@@ -66,12 +54,10 @@ def download_corpus():
     if request.args:
         treebank_id = request.args['treebank_id'].strip('#')
         db_path = treebank_id + '.db'
-        if os.path.exists(PATH_TO_CORPORA + '/' + db_path):
-            db = CorpusDB(PATH_TO_CORPORA + '/' + db_path)
-            corpus, corpus_name = db.get_file()
-            with open(PATH_TO_CORPORA + '/' + treebank_id, 'w') as f: 
-                f.write(corpus)
-            return send_file(PATH_TO_CORPORA + '/' + treebank_id, as_attachment=True, attachment_filename=corpus_name)
+        corpus, corpus_name = db.get_file(treebank_id)
+        with open('/tmp/' + treebank_id, 'w') as f: 
+            f.write(corpus)
+        return send_file('/tmp/' + treebank_id, as_attachment=True, attachment_filename=corpus_name)
     return jsonify({'corpus': 'something went wrong'})
 
 
@@ -80,10 +66,9 @@ def upload_new_corpus():
     if request.method == 'POST':
         f = request.files['file']
         corpus_name = f.filename
-        corpus = f.read().decode()
+        corpus = f.read().decode().strip()
         treebank_id = str(uuid.uuid4())
-        db = CorpusDB(PATH_TO_CORPORA + '/' + treebank_id + '.db')
-        db.write_corpus(corpus, corpus_name)
+        DB.write_corpus(treebank_id, corpus, corpus_name)
         return redirect(url_for('corpus_page', treebank_id=treebank_id))
     return jsonify({'something': 'went wrong'})
 
@@ -104,20 +89,14 @@ def index():
     return send_from_directory('../standalone', 'welcome_page.html')
 
 
-# @app.route('/<treebank_id>', methods=['GET', 'POST'])
-# def index_corpus(treebank_id):
-#     return redirect(url_for('corpus_page', treebank_id=treebank_id))
-
-
 @app.route('/annotatrix/<treebank_id>')
 def corpus_page(treebank_id):
-    print('XX:',treebank_id, file=sys.stderr)
     if '.' in treebank_id:
         return send_from_directory('../standalone', treebank_id)
     return send_from_directory('../standalone', 'annotator.html')
 
 
 if __name__ == '__main__':
-    print(welcome)
+    print(WELCOME)
     app.secret_key = config.SECRET_KEY
-    app.run(debug = True, port = 5316)
+    app.run(debug = True, port = 5317)
